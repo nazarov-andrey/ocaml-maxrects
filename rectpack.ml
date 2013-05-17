@@ -7,20 +7,22 @@ module Point =
     value create x y = (x, y);
     value x (x, _) = x;
     value y (_, y) = y;
+    value toString pnt = Printf.sprintf "(%d, %d)" (x pnt) (y pnt);
+
     value between val low high = (low <= val) && (val <= high);
     value xBetween pnt endA endB =
+      (* let () = Printf.printf "xBetween %s %s %s\n%!" (toString pnt) (toString endA) (toString endB) in *)
       let xA = x endA in
       let xB = x endB in
       let x = x pnt in
         between x (min xA xB) (max xA xB);
 
-    value yBetween pnt endA endB =      
+    value yBetween pnt endA endB =
+      (* let () = Printf.printf "yBetween %s %s %s\n%!" (toString pnt) (toString endA) (toString endB) in *)
       let yA = y endA in
       let yB = y endB in
       let y = y pnt in
         between y (min yA yB) (max yA yB);
-
-    value toString pnt = Printf.sprintf "(%d, %d)" (x pnt) (y pnt);
 
     value equal pntA pntB = x pntA = x pntB && y pntA = y pntB;
   end;
@@ -41,12 +43,15 @@ module Rectangle =
     value x rect = let (x, _) = leftBottom rect in x;
     value y rect = let (_, y) = leftBottom rect in y;
 
+    value toString rect = Printf.sprintf "(%d, %d, %d, %d)" (x rect) (y rect) (width rect) (height rect);
+
     value isDegenerate rect =
       let lb = leftBottom rect in
       let rt = rightTop rect in
         Point.(x lb = x rt || y lb = y rt);
 
     value pntInside rect pnt =
+      (* let () = Printf.printf "pntInside %s %s\n%!" (toString rect) (Point.toString pnt) in *)
       let lb = leftBottom rect in
       let rt = rightTop rect in
         Point.(xBetween pnt lb rt && yBetween pnt lb rt);
@@ -67,8 +72,6 @@ module Rectangle =
       let rtB = rightTop rectB in
         Point.((x lbA = x lbB || x lbA = x rtB) && (yBetween lbA lbB rtB || yBetween rtA lbB rtB)
                 || (y lbA = y lbB || y lbA = y rtB) && (xBetween lbA lbB rtB || xBetween rtA lbB rtB));
-
-    value toString rect = Printf.sprintf "(%d, %d, %d, %d)" (x rect) (y rect) (width rect) (height rect);
 
     value equal rectA rectB = Point.(equal (leftBottom rectA) (leftBottom rectB) && equal (rightTop rectA) (rightTop rectB));
   end;
@@ -131,6 +134,7 @@ module Bin =
     };
 
     value create width height = { width; height; holes = [ Rectangle.fromCoordsAndDims 0 0 width height ]; rects = [] };
+    (* value create width height = { width; height; holes = [ Rectangle.fromCoordsAndDims 68 0 38 41; Rectangle.fromCoordsAndDims 60 25 31 175 ]; rects = [] }; *)
     value rects bin = bin.rects;
     value holes bin = bin.holes;
     value getRect bin indx = List.nth bin.rects (indx mod (List.length bin.rects));
@@ -190,7 +194,8 @@ module Bin =
             in
               splitHoles holes ([], [])
           in (
-            bin.holes := splitHoles bin.holes;
+            (* bin.holes := splitHoles bin.holes; *)
+            bin.holes := List.sort ~cmp:(fun holeA holeB -> let xcompare = Rectangle.(compare (x holeA) (x holeB)) in if xcompare = 0 then Rectangle.(compare (y holeA) (y holeB)) else xcompare) (splitHoles bin.holes);
 
             Printf.printf "holes: %s\n%!" (String.concat "," (List.map (fun rect -> Rectangle.toString rect) bin.holes));
 
@@ -199,16 +204,109 @@ module Bin =
           );
 
     value remove bin rect =
+      let () = Printf.printf "+++rects %s\n%!" (String.concat ";" (List.map (fun hole -> Rectangle.toString hole) bin.rects)) in
 
-      let rec putNewHole holes newHole retval =
+
+      let rec mergePass holes passesUntilStop =
+        let () = Printf.printf "mergePass call %s\n%!" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) holes)) in
+        match holes with
+        [ [ holeA :: holes ] -> merge holeA holes [] False passesUntilStop
+        | _ -> holes
+        ]
+
+      and merge holeA holes retval changed passesUntilStop =
+        let () = Printf.printf "\t-------------------------------\n%!" in
+        let () = Printf.printf "\tholes %s\n%!" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) holes)) in
+        let () = Printf.printf "\tretval %s\n%!" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) retval)) in
+        match holes with
+        [ [] ->
+          let holes = (List.rev retval) @ [ holeA ] in
+            let () = Printf.printf "\tchanged %B\n%!" changed in
+            if changed
+            then mergePass holes None
+            else
+              let () = Printf.printf "\tpassesUntilStop %s\n%!" (match passesUntilStop with [ Some pus -> string_of_int pus | _ -> "none"]) in
+              match passesUntilStop with
+              [ None -> mergePass holes (Some (List.length holes - 1))
+              | Some pus when pus > 0 -> mergePass holes (Some (pus - 1))
+              | _ -> holes
+              ]
+        | _ ->
+          let holeB = List.hd holes in
+            let () = Printf.printf "\tholeA = %s holeB = %s\n%!" (Rectangle.toString holeA) (Rectangle.toString holeB) in
+            let () = Printf.printf "\t%s inside %s: %B\n%!" (Rectangle.toString holeB) (Rectangle.toString holeA) (Rectangle.rectInside holeA holeB) in
+
+            if Rectangle.rectInside holeA holeB
+            then merge holeA (List.tl holes) retval changed passesUntilStop
+            else
+
+            let () = Printf.printf "\t%s inside %s: %B\n%!" (Rectangle.toString holeA) (Rectangle.toString holeB) (Rectangle.rectInside holeB holeA) in
+            if Rectangle.rectInside holeB holeA
+            then merge holeB (List.tl holes) retval changed passesUntilStop
+            else
+
+            let () = Printf.printf "\t%s and %s intersects: %B\n%!" (Rectangle.toString holeA) (Rectangle.toString holeB) (Rectangle.intersects holeA holeB) in
+            if Rectangle.intersects holeA holeB
+            then
+              let () = Printf.printf "\t%s plus %s: %s\n%!" (Rectangle.toString holeA) (Rectangle.toString holeB) (String.concat ";" (List.map (fun hole -> Rectangle.toString hole) (Hole.plus holeA holeB))) in
+              match Hole.plus holeA holeB with
+              [ [ newHoleA; newHoleB ] when Rectangle.(equal newHoleA holeA && equal newHoleB holeB || equal newHoleA holeB && equal newHoleB holeA) ->
+                let () = Printf.printf "\tcase 0\n%!" in
+                  merge holeA (List.tl holes) [ holeB :: retval ] changed passesUntilStop
+              | [ newHoleA; newHoleB ] ->
+                let () = Printf.printf "\tcase 1\n%!" in
+                let allHoles = holes @ retval in
+                let (changed, retval) =
+                  if List.exists (fun hole -> Rectangle.rectInside hole newHoleB) allHoles
+                  then let () = Printf.printf "\t%s or it's shell rect already in max rects\n%!" (Rectangle.toString newHoleB) in (changed, retval)
+                  else let () = Printf.printf "\tadding %s to max rects\n%!" (Rectangle.toString newHoleB) in (True, [ newHoleB :: retval ])
+                in
+                let (changed, retval) =
+                  if List.exists (fun hole -> Rectangle.rectInside hole newHoleA) allHoles
+                  then let () = Printf.printf "\t%s or it's shell rect already in max rects\n%!" (Rectangle.toString newHoleA) in (changed, retval)
+                  else let () = Printf.printf "\tadding %s to max rects\n%!" (Rectangle.toString newHoleA) in (True, [ newHoleA :: retval ])
+                in
+                  merge holeA (List.tl holes) [ holeB :: retval ] changed passesUntilStop
+              | [ newHole ] when Rectangle.rectInside newHole holeA && Rectangle.rectInside newHole holeB -> let () = Printf.printf "\tcase 2\n%!" in merge newHole (List.tl holes) retval True passesUntilStop
+              | [ newHole ] when Rectangle.rectInside newHole holeA -> let () = Printf.printf "\tcase 3\n%!" in merge newHole (List.tl holes) [ holeB :: retval ] True passesUntilStop
+              | [ newHole ] -> let () = Printf.printf "\tcase 4\n%!" in merge holeA (List.tl holes) [ newHole :: retval ] True passesUntilStop
+              | _ -> let () = Printf.printf "\t case 5\n%!" in merge holeA (List.tl holes) [ holeB :: retval ] changed passesUntilStop (* this case is when rects contacts by single vertex *)
+              ]
+            else merge holeA (List.tl holes) [ holeB :: retval ] changed passesUntilStop
+        ]
+      in
+        let rects = List.remove bin.rects rect in
+          if rects <> bin.rects
+          then (
+            bin.rects := rects;
+            (* bin.holes := mergePass [ rect :: bin.holes ] None; *)
+            bin.holes := List.sort ~cmp:(fun holeA holeB -> let xcompare = Rectangle.(compare (x holeA) (x holeB)) in if xcompare = 0 then Rectangle.(compare (y holeA) (y holeB)) else xcompare) (mergePass [ rect :: bin.holes ] None);
+
+            Printf.printf "bin holes %s\n%!" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) bin.holes));
+
+(*             let sqrsum = List.fold_left (fun sum hole -> Rectangle.(sum + width hole * height hole)) 0 bin.holes in
+            let sqrsum = List.fold_left (fun sum hole -> Rectangle.(sum + width hole * height hole)) sqrsum bin.rects in
+            let () = Printf.printf "sqrsum %d\n%!" sqrsum in
+              assert (sqrsum = 200 * 200); *)
+          )
+          else ();
+
+        (* with [ Not_found -> merge (List.hd holes) (List.tl holes) ]; *)
+
+(*       let rec putNewHole holes newHole retval =
         match holes with
         [ [ hole :: _holes ] ->
-          if Rectangle.rectInside hole newHole
-          then (False, retval @ holes)
+          if Rectangle.equal hole newHole
+          then (True, retval @ holes)
           else
-            if Rectangle.rectInside newHole hole
-            then putNewHole _holes newHole retval
-            else putNewHole _holes newHole [ hole :: retval ]
+            let () = Printf.printf "\t\t\t1:%s inside %s: %B\n%!" (Rectangle.toString newHole) (Rectangle.toString hole) (Rectangle.rectInside hole newHole) in
+            if Rectangle.rectInside hole newHole
+            then (False, retval @ holes)
+            else
+              let () = Printf.printf "\t\t\t2:%s inside %s: %B\n%!" (Rectangle.toString hole) (Rectangle.toString newHole) (Rectangle.rectInside newHole hole) in
+              if Rectangle.rectInside newHole hole
+              then putNewHole _holes newHole retval
+              else putNewHole _holes newHole [ hole :: retval ]
         | _ -> (True, [ newHole :: retval ])
         ]
       in
@@ -216,13 +314,14 @@ module Bin =
       let rec putNewHoles holes newHoles holePairs =        
         match newHoles with
         [ [ newHole :: newHoles ] ->
-          let () = Printf.printf "putNewHoles call, newHole %s\n%!" (Rectangle.toString newHole) in
+          let () = Printf.printf "\t\t\tputNewHoles call, newHole %s\n%!" (Rectangle.toString newHole) in
           let (isMaxHole, holes) = putNewHole holes newHole [] in
-          let () = Printf.printf "is max hole %B, holes %s\n%!" (isMaxHole) (String.concat ";" (List.map (fun hole -> Rectangle.toString hole) holes)) in
+          let () = Printf.printf "\t\t\tis max hole %B, holes %s\n%!" (isMaxHole) (String.concat ";" (List.map (fun hole -> Rectangle.toString hole) holes)) in
             if isMaxHole
             then putNewHoles holes newHoles holePairs
             else
-              let newHolePairs = List.map (fun hole -> (newHole, hole)) holes in
+              let newHolePairs = List.filter_map (fun hole -> if Rectangle.rectInside hole newHole then None else Some (newHole, hole)) holes in
+              let () = Printf.printf "\t\t\tadding new hole pairs: %s\n%!" (String.concat ";" (List.map (fun (holeA, holeB) -> Printf.sprintf "[%s, %s]" (Rectangle.toString holeA) (Rectangle.toString holeB)) newHolePairs)) in 
                 putNewHoles holes newHoles (newHolePairs @ holePairs)
         | _ -> (holes, holePairs) 
         ]
@@ -232,8 +331,14 @@ module Bin =
         match holePairs with
         [ [ (holeA, holeB) :: holePairs ] ->
           let newHoles = Hole.plus holeA holeB in
-          let () = Printf.printf "new holes: %s\n%!" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) newHoles)) in
-          let (holes, holePairs) = putNewHoles holes newHoles holePairs in
+          let () = Printf.printf "\tprocessing pair %s %s\n%!" (Rectangle.toString holeA) (Rectangle.toString holeB) in
+          let () = Printf.printf "\t\tnew holes: %s\n%!" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) newHoles)) in
+          let (holes, holePairs) =
+            match newHoles with
+            [ [ newHoleA; newHoleB ] when Rectangle.(equal newHoleA holeA && equal newHoleB holeB || equal newHoleA holeB && equal newHoleB holeA) -> ([ holeA :: [ holeB :: holes ] ], holePairs)
+            | _ -> putNewHoles holes newHoles holePairs
+            ]
+          in
             updateHoles holes holePairs
         | _ -> holes 
         ]
@@ -271,11 +376,12 @@ module Bin =
         [ [ rect :: holes ] ->
           let (neighbours, other) = List.partition (fun hole -> Rectangle.areContiguous hole rect) (holes @ restHoles) in
           let holePairs = List.map (fun hole -> (rect, hole)) neighbours in (
-            Printf.printf "neighbours: %s\n%!" (String.concat ";" (List.map (fun hole -> Rectangle.toString hole) neighbours));
-            Printf.printf "hole pairs: %s\n%!" (String.concat ";" (List.map (fun (holeA, holeB) -> Printf.sprintf "[%s, %s]" (Rectangle.toString holeA) (Rectangle.toString holeB)) holePairs));
+            Printf.printf "\tneighbours: %s\n%!" (String.concat ";" (List.map (fun hole -> Rectangle.toString hole) neighbours));
+            Printf.printf "\thole pairs: %s\n%!" (String.concat ";" (List.map (fun (holeA, holeB) -> Printf.sprintf "[%s, %s]" (Rectangle.toString holeA) (Rectangle.toString holeB)) holePairs));
 
             let affeted = updateHoles neighbours holePairs in
-              if holes = []
+            let () = Printf.printf "\taffeted %s\n%!" (String.concat ";" (List.map (fun hole -> Rectangle.toString hole) affeted)) in
+              if affeted = [] && holes = []
               then affeted @ other
               else merge (holes @ affeted) other;
           )
@@ -291,7 +397,7 @@ module Bin =
 
           Printf.printf "bin holes %s\n%!" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) bin.holes));
         )
-        else ();
+        else (); *)
 
     value clean bin = (
       bin.holes := [ Rectangle.fromCoordsAndDims 0 0 bin.width bin.height ];
@@ -321,12 +427,60 @@ let bin = Bin.create binSize binSize in (
 
   drawRect (Rectangle.fromCoordsAndDims 0 0 binSize binSize);
 
+  Graphics.set_color Graphics.green;
+(*   drawRect (Rectangle.fromCoordsAndDims 0 76 200 124);
+  Graphics.set_color Graphics.yellow;
+  drawRect (Rectangle.fromCoordsAndDims 0 0 178 200);
+  Graphics.set_color Graphics.cyan;
+  drawRect (Rectangle.fromCoordsAndDims 0 0 200 16);
+  Graphics.set_color Graphics.blue;
+  drawRect (Rectangle.fromCoordsAndDims 199 0 1 200); *)
+
+(*   Graphics.set_color Graphics.blue;
+  drawRect (Rectangle.fromCoordsAndDims 71 0 35 39);
+  drawRect (Rectangle.fromCoordsAndDims 0 39 71 71);
+ *)
+
+(* drawRect (Rectangle.fromCoordsAndDims 110 30 49 170);
+drawRect (Rectangle.fromCoordsAndDims 106 30 53 46);
+
+drawRect (Rectangle.fromCoordsAndDims 110 32 90 168);
+drawRect (Rectangle.fromCoordsAndDims 178 16 22 184);
+(* drawRect (Rectangle.fromCoordsAndDims 199 0 1 200); *)
+(* drawRect (Rectangle.fromCoordsAndDims 92 32 108 44); *)
+drawRect (Rectangle.fromCoordsAndDims 71 0 80 54);
+(* drawRect (Rectangle.fromCoordsAndDims 0 39 36 15);
+drawRect (Rectangle.fromCoordsAndDims 0 97 92 103);
+drawRect (Rectangle.fromCoordsAndDims 0 107 200 93); *)
+(* drawRect (Rectangle.fromCoordsAndDims 20 0 16 54); *)
+(* drawRect (Rectangle.fromCoordsAndDims 44 78 48 122); *)
+drawRect (Rectangle.fromCoordsAndDims 71 32 129 22);
+drawRect (Rectangle.fromCoordsAndDims 92 0 59 76);
+drawRect (Rectangle.fromCoordsAndDims 92 30 67 46);
+
+drawRect (Rectangle.fromCoordsAndDims 110 0 41 200);
+
+  Graphics.set_color Graphics.blue;
+  drawRect (Rectangle.fromCoordsAndDims 92 30 67 46);
+  Graphics.set_color Graphics.yellow;
+  drawRect (Rectangle.fromCoordsAndDims 106 30 53 46);
+
+  Graphics.set_color Graphics.magenta;
+  drawRect (Rectangle.fromCoordsAndDims 106 32 94 44);
+  drawRect (Rectangle.fromCoordsAndDims 71 30 88 24); *)
+
+  (* (106, 32, 94, 44) plus (71, 30, 88, 24) *)
+
+
+  (* (60, 25, 46, 16);(68, 0, 23, 200) *)
+
   (* Bin.iterRects (fun rect -> drawRect rect) bin; *)
 
 
   Printf.printf "pizda\n%!";
   (* List.iter (fun rect -> Printf.printf "%s\n%!" (Rectangle.toString rect)) (Hole.plus (Rectangle.fromCoordsAndDims 20 0 34 200) (Rectangle.fromCoordsAndDims 20 0 73 35)); *)
-  List.iter (fun rect -> Printf.printf "%s\n%!" (Rectangle.toString rect)) (Hole.plus (Rectangle.fromCoordsAndDims 0 20 20 20) (Rectangle.fromCoordsAndDims 20 0 30 30));
+  (* List.iter (fun rect -> Printf.printf "%s\n%!" (Rectangle.toString rect)) (Hole.plus (Rectangle.fromCoordsAndDims 0 20 20 20) (Rectangle.fromCoordsAndDims 20 0 30 30)); *)
+  Printf.printf "rect inside %B\n%!" (Rectangle.rectInside (Rectangle.fromCoordsAndDims 0 0 200 200) (Rectangle.fromCoordsAndDims 0 0 200 200));
   Printf.printf "pizda\n%!";
 
   Printf.printf "%B\n%!" (Rectangle.areContiguous (Rectangle.fromCoordsAndDims 0 0 50 15) (Rectangle.fromCoordsAndDims 0 120 200 80));
