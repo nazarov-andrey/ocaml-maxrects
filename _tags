@@ -1,0 +1,2 @@
+<*.ml>: package(camlp4),syntax(camlp4r),package(extlib),package(graphics)
+<*.{native,byte}>: package(extlib),package(graphics)
