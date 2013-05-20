@@ -1,7 +1,5 @@
 open ExtList;
 
-
-
 module Point =
   struct
     type t = (int * int);
@@ -11,22 +9,9 @@ module Point =
     value y (_, y) = y;
     value toString pnt = Printf.sprintf "(%d, %d)" (x pnt) (y pnt);
 
-    value between val low high = (low <= val) && (val <= high);
-    value xBetween pnt endA endB =
-      (* let () = debug "xBetween %s %s %s" (toString pnt) (toString endA) (toString endB) in *)
-      let xA = x endA in
-      let xB = x endB in
-      let x = x pnt in
-        between x (min xA xB) (max xA xB);
-
-    value yBetween pnt endA endB =
-      (* let () = debug "yBetween %s %s %s" (toString pnt) (toString endA) (toString endB) in *)
-      let yA = y endA in
-      let yB = y endB in
-      let y = y pnt in
-        between y (min yA yB) (max yA yB);
-
-    value equal pntA pntB = x pntA = x pntB && y pntA = y pntB;
+    value xBetween (x, _) (xA, _) (xB, _) = ((min xA xB) <= x) && (x <= (max xA xB));
+    value yBetween (_, y) (_, yA) (_, yB) = ((min yA yB) <= y) && (y <= (max yA yB));
+    value equal (xA, yA) (xB, yB) = xA = xB && yA = yB;
   end;
 
 module Rectangle = 
@@ -40,39 +25,22 @@ module Rectangle =
 
     value leftBottom (lb, _) = lb;
     value rightTop (_, rt) = rt;
-    value width rect = Point.(x (rightTop rect) - x (leftBottom rect));
-    value height rect = Point.(y (rightTop rect) - y (leftBottom rect));
-    value x rect = let (x, _) = leftBottom rect in x;
-    value y rect = let (_, y) = leftBottom rect in y;
+    value width (lb, rt) = Point.(x rt - x lb);
+    value height (lb, rt) = Point.(y rt - y lb);
+    value x (lb, _) = Point.x lb;
+    value y (lb, _) = Point.y lb;
 
     value toString rect = Printf.sprintf "(%d, %d, %d, %d)" (x rect) (y rect) (width rect) (height rect);
 
-    value isDegenerate rect =
-      let lb = leftBottom rect in
-      let rt = rightTop rect in
-        Point.(x lb = x rt || y lb = y rt);
+    value isDegenerate (lb, rt) = Point.(x lb = x rt || y lb = y rt);
 
-    value pntInside rect pnt =
-      (* let () = debug "pntInside %s %s" (toString rect) (Point.toString pnt) in *)
-      let lb = leftBottom rect in
-      let rt = rightTop rect in
-        Point.(xBetween pnt lb rt && yBetween pnt lb rt);
+    value pntInside (lb, rt) pnt = Point.(xBetween pnt lb rt && yBetween pnt lb rt);
 
-    value rectInside outer inner = pntInside outer (leftBottom inner) && pntInside outer (rightTop inner);
+    value rectInside outer (lb, rt) = pntInside outer lb && pntInside outer rt;
 
-    value intersects rectA rectB =
-      let lbA = leftBottom rectA in
-      let rtA = rightTop rectA in
-      let lbB = leftBottom rectB in
-      let rtB = rightTop rectB in
-        not Point.(x rtA < x lbB || x rtB < x lbA || y rtA < y lbB || y rtB < y lbA);
+    value intersects (lbA, rtA) (lbB, rtB) = not Point.(x rtA < x lbB || x rtB < x lbA || y rtA < y lbB || y rtB < y lbA);
 
-    value intersection rectA rectB =
-      let lbA = leftBottom rectA in
-      let rtA = rightTop rectA in
-      let lbB = leftBottom rectB in
-      let rtB = rightTop rectB in
-
+    value intersection (lbA, rtA) (lbB, rtB) =
       let left = Point.(max (x lbA) (x lbB)) in
       let right = Point.(min (x rtA) (x rtB)) in
         if left > right
@@ -87,16 +55,11 @@ module Rectangle =
             let intersection = fromCoords left bottom right top in
               if isDegenerate intersection then None else Some intersection;
 
-    value minus from rect =
+    value minus (lbFrom, rtFrom) (lbRect, rtRect) =
       let addRect lbx lby rtx rty retval =
         let rect = fromCoords lbx lby rtx rty in
           if isDegenerate rect then retval else [ rect :: retval ]
       in
-
-      let lbFrom = leftBottom from in
-      let rtFrom = rightTop from in
-      let lbRect = leftBottom rect in
-      let rtRect = rightTop rect in
         Point.(
           let retval = addRect (x lbFrom) (y lbFrom) (x lbRect) (y rtFrom) [] in
           let retval = addRect (x lbRect) (y lbFrom) (x rtRect) (y lbRect) retval in
@@ -104,15 +67,11 @@ module Rectangle =
             addRect (x rtRect) (y lbFrom) (x rtFrom) (y rtFrom) retval;
         );
 
-    value areContiguous rectA rectB =
-      let lbA = leftBottom rectA in
-      let rtA = rightTop rectA in
-      let lbB = leftBottom rectB in
-      let rtB = rightTop rectB in
-        Point.((x lbA = x lbB || x lbA = x rtB) && (yBetween lbA lbB rtB || yBetween rtA lbB rtB)
-                || (y lbA = y lbB || y lbA = y rtB) && (xBetween lbA lbB rtB || xBetween rtA lbB rtB));
+    value areContiguous (lbA, rtA) (lbB, rtB) =
+      Point.((x lbA = x lbB || x lbA = x rtB) && (yBetween lbA lbB rtB || yBetween rtA lbB rtB)
+        || (y lbA = y lbB || y lbA = y rtB) && (xBetween lbA lbB rtB || xBetween rtA lbB rtB));
 
-    value equal rectA rectB = Point.(equal (leftBottom rectA) (leftBottom rectB) && equal (rightTop rectA) (rightTop rectB));
+    value equal (lbA, rtA) (lbB, rtB) = Point.(equal lbA lbB && equal rtA rtB);
   end;
 
 module Hole =
@@ -160,39 +119,7 @@ module Bin =
       rects: mutable list Rectangle.t;
     };
 
-(*     value create width height =
-    let rects = 
-      [
-        Rectangle.fromCoordsAndDims 44 31 19 23;
-        Rectangle.fromCoordsAndDims 82 40 46 31;
-        Rectangle.fromCoordsAndDims 147 0 35 37;
-        Rectangle.fromCoordsAndDims 129 0 18 34;
-        Rectangle.fromCoordsAndDims 82 0 47 40;
-        Rectangle.fromCoordsAndDims 65 0 17 53;
-        Rectangle.fromCoordsAndDims 44 0 21 31;
-        Rectangle.fromCoordsAndDims 0 0 44 44;
-      ]
-    in
-
-
-    let holes =
-      [
-        Rectangle.fromCoordsAndDims 0 44 44 156;
-        Rectangle.fromCoordsAndDims 0 54 82 146;
-        Rectangle.fromCoordsAndDims 0 71 200 129;
-        Rectangle.fromCoordsAndDims 63 31 2 169;
-        Rectangle.fromCoordsAndDims 63 53 19 147;
-        Rectangle.fromCoordsAndDims 128 40 72 160;
-        Rectangle.fromCoordsAndDims 129 34 18 166;
-        Rectangle.fromCoordsAndDims 129 37 71 163;
-        Rectangle.fromCoordsAndDims 182 0 18 200;
-      ]
-    in
-      { width; height; holes; rects }; *)
-
-
     value create width height = { width; height; holes = [ Rectangle.fromCoordsAndDims 0 0 width height ]; rects = [] };
-    (* value create width height = { width; height; holes = [ Rectangle.fromCoordsAndDims 68 0 38 41; Rectangle.fromCoordsAndDims 60 25 31 175 ]; rects = [] }; *)
     value rects bin = bin.rects;
     value holes bin = bin.holes;
     value getRect bin indx = List.nth bin.rects (indx mod (List.length bin.rects));
@@ -252,12 +179,11 @@ module Bin =
             in
               splitHoles holes ([], [])
           in (
-            (* bin.holes := splitHoles bin.holes; *)
-            bin.holes := List.sort ~cmp:(fun holeA holeB -> let xcompare = Rectangle.(compare (x holeA) (x holeB)) in if xcompare = 0 then Rectangle.(compare (y holeA) (y holeB)) else xcompare) (splitHoles bin.holes);
+            (* bin.holes := List.sort ~cmp:(fun holeA holeB -> let xcompare = Rectangle.(compare (x holeA) (x holeB)) in if xcompare = 0 then Rectangle.(compare (y holeA) (y holeB)) else xcompare) (splitHoles bin.holes); *)
+            bin.holes := splitHoles bin.holes;
+            bin.rects := [ placedRect :: bin.rects ];
 
             debug "holes: %s" (String.concat "," (List.map (fun rect -> Rectangle.toString rect) bin.holes));
-
-            bin.rects := [ placedRect :: bin.rects ];
             rectPos;
           );
 
@@ -372,7 +298,8 @@ module Bin =
           if rects <> bin.rects
           then (
             bin.rects := rects;
-            bin.holes := List.sort ~cmp:(fun holeA holeB -> let xcompare = Rectangle.(compare (x holeA) (x holeB)) in if xcompare = 0 then Rectangle.(compare (y holeA) (y holeB)) else xcompare) (mergePass [ rect :: bin.holes ] None);
+            bin.holes := mergePass [ rect :: bin.holes ] None; 
+            (* bin.holes := List.sort ~cmp:(fun holeA holeB -> let xcompare = Rectangle.(compare (x holeA) (x holeB)) in if xcompare = 0 then Rectangle.(compare (y holeA) (y holeB)) else xcompare) (mergePass [ rect :: bin.holes ] None); *)
             debug "bin holes %s" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) bin.holes));
           )
           else ();
