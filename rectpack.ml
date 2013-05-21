@@ -117,9 +117,10 @@ module Bin =
       height: int;
       holes: mutable list Rectangle.t;
       rects: mutable list Rectangle.t;
+      needRepair: mutable bool;
     };
 
-    value create width height = { width; height; holes = [ Rectangle.fromCoordsAndDims 0 0 width height ]; rects = [] };
+    value create width height = { width; height; holes = [ Rectangle.fromCoordsAndDims 0 0 width height ]; rects = []; needRepair = False };
     value rects bin = bin.rects;
     value holes bin = bin.holes;
     value getRect bin indx = List.nth bin.rects (indx mod (List.length bin.rects));
@@ -127,7 +128,124 @@ module Bin =
     value width bin = bin.width;
     value height bin = bin.height;
 
-    value add bin width height =
+    value holesSquare holes =
+      let rec prepare holeA holes nextPassHoles retval =
+        match holes with 
+        [ [ holeB :: holes ] ->
+          match Rectangle.intersection holeA holeB with
+          [ Some intersection ->
+            let cuttingsA = Rectangle.minus holeA intersection in
+            let cuttingsB = Rectangle.minus holeB intersection in
+              prepare intersection holes (cuttingsA @ cuttingsB @ nextPassHoles) retval
+          | _ -> prepare holeA holes [ holeB :: nextPassHoles ] retval
+          ]
+        | _ ->
+          match nextPassHoles with
+          [ [] -> [ holeA :: retval ]
+          | nextPassHoles -> prepare (List.hd nextPassHoles) (List.tl nextPassHoles) [] [ holeA :: retval ]
+          ]
+        ]
+      in
+
+      let rects = prepare (List.hd holes) (List.tl holes) [] [] in
+        List.fold_left (fun square rect -> square + Rectangle.(width rect * height rect)) 0 rects;
+
+    value rectsSquare rects = List.fold_left (fun square rect -> square + Rectangle.(width rect * height rect)) 0 rects;
+
+    value repair bin =
+      if bin.needRepair
+      then 
+        let () = debug "+++rects %s" (String.concat ";" (List.map (fun hole -> Rectangle.toString hole) bin.rects)) in
+        let () = debug "+++holes %s" (String.concat ";" (List.map (fun hole -> Rectangle.toString hole) bin.holes)) in
+
+        let rec mergePass holes retval =
+          let () = debug "mergePass call %s" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) holes)) in
+          let () = debug:holes "mergePass call %d %d" (List.length holes) (List.length retval) in
+          match holes with
+          [ [ holeA :: holes ] -> merge holeA holes [] retval False
+          | _ -> assert False
+          ]
+
+        and merge holeA holes checkedHoles retval changed =
+          let () = debug "\t-------------------------------" in
+          let () = debug "\tholes %s" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) holes)) in
+          let () = debug "\tcheckedHoles %s" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) checkedHoles)) in
+          let () = debug "\tretval %s" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) retval)) in
+          (* let () = debug "\trects square + holes square %d" (holesSquare [ holeA :: (holes @ checkedHoles) ] + rectsSquare bin.rects) in *)
+          match holes with
+          [ [] ->
+              let () = debug "\tchanged %B" changed in
+              if changed
+              then mergePass ((List.rev retval) @ (List.rev checkedHoles) @ [ holeA ]) []
+              else
+                match checkedHoles with
+                [ [] -> [ holeA :: retval ]
+                | _ -> mergePass checkedHoles [ holeA :: retval ] 
+                ]
+          | _ ->
+            let holeB = List.hd holes in
+              let () = debug "\tholeA = %s holeB = %s" (Rectangle.toString holeA) (Rectangle.toString holeB) in
+              let () = debug "\t%s inside %s: %B" (Rectangle.toString holeB) (Rectangle.toString holeA) (Rectangle.rectInside holeA holeB) in
+
+              if Rectangle.rectInside holeA holeB
+              then merge holeA (List.tl holes) checkedHoles retval changed
+              else
+
+              let () = debug "\t%s inside %s: %B" (Rectangle.toString holeA) (Rectangle.toString holeB) (Rectangle.rectInside holeB holeA) in
+              if Rectangle.rectInside holeB holeA
+              then merge holeB (List.tl holes) checkedHoles retval True
+              else
+
+              let () = debug "\t%s and %s intersects: %B" (Rectangle.toString holeA) (Rectangle.toString holeB) (Rectangle.intersects holeA holeB) in
+              if Rectangle.intersects holeA holeB
+              then              
+                let () = debug "\t%s plus %s: %s" (Rectangle.toString holeA) (Rectangle.toString holeB) (String.concat ";" (List.map (fun hole -> Rectangle.toString hole) (Hole.plus holeA holeB))) in
+                match Hole.plus holeA holeB with
+                [ [ newHoleA; newHoleB ] when Rectangle.(equal newHoleA holeA && equal newHoleB holeB || equal newHoleA holeB && equal newHoleB holeA) ->
+                  let () = debug "\tcase 0" in
+                    merge holeA (List.tl holes) [ holeB :: checkedHoles ] retval changed
+                | [ newHoleA; newHoleB ] ->
+                  let () = debug "\tcase 1" in
+                  let allHoles = [ holeA :: holes @ checkedHoles @ retval ] in
+                  let (changed, checkedHoles) =
+                    if List.exists (fun hole -> Rectangle.rectInside hole newHoleB) allHoles
+                    then let () = debug "\t%s or it's shell rect already in max rects" (Rectangle.toString newHoleB) in (changed, checkedHoles)
+                    else let () = debug "\tadding %s to max rects" (Rectangle.toString newHoleB) in (True, [ newHoleB :: checkedHoles ])
+                  in
+                  let (changed, checkedHoles) =
+                    if List.exists (fun hole -> Rectangle.rectInside hole newHoleA) allHoles
+                    then let () = debug "\t%s or it's shell rect already in max rects" (Rectangle.toString newHoleA) in (changed, checkedHoles)
+                    else let () = debug "\tadding %s to max rects" (Rectangle.toString newHoleA) in (True, [ newHoleA :: checkedHoles ])
+                  in
+                    merge holeA (List.tl holes) [ holeB :: checkedHoles ] retval changed
+                | [ newHole ] when Rectangle.rectInside newHole holeA && Rectangle.rectInside newHole holeB -> let () = debug "\tcase 2" in merge newHole (List.tl holes) checkedHoles retval True
+                | [ newHole ] when Rectangle.rectInside newHole holeA -> let () = debug "\tcase 3" in merge newHole (List.tl holes) [ holeB :: checkedHoles ] retval True
+                | [ newHole ] when Rectangle.rectInside newHole holeB -> let () = debug "\tcase 4" in merge holeA (List.tl holes) [ newHole :: checkedHoles ] retval True
+                | [ newHole ] ->
+                  let () = debug "\tcase 5" in
+                  let allHoles = [ holeA :: holes @ checkedHoles @ retval ] in
+                  let (changed, checkedHoles) =
+                    if List.exists (fun hole -> Rectangle.rectInside hole newHole) allHoles
+                    then let () = debug "\t%s or it's shell rect already in max rects" (Rectangle.toString newHole) in (changed, checkedHoles)
+                    else let () = debug "\tadding %s to max rects" (Rectangle.toString newHole) in (True, [ newHole :: checkedHoles ])
+                  in
+                   merge holeA (List.tl holes) [ holeB :: checkedHoles] retval changed
+                | [] -> let () = debug "\t case 6" in merge holeA (List.tl holes) [ holeB :: checkedHoles ] retval changed (* this case is when rects contacts by single vertex *)
+                | _ -> assert False
+                ]
+              else merge holeA (List.tl holes) [ holeB :: checkedHoles ] retval changed
+          ]
+        in (
+          bin.holes := mergePass bin.holes [];
+          bin.needRepair := False;
+        )
+      else ();
+
+    value add bin width height = (
+      if bin.needRepair
+      then repair bin
+      else ();
+
       let holeToPlace = 
         List.fold_left (fun holeToPlace hole ->
           if Rectangle.width hole >= width && Rectangle.height hole >= height
@@ -179,134 +297,28 @@ module Bin =
             in
               splitHoles holes ([], [])
           in (
-            (* bin.holes := List.sort ~cmp:(fun holeA holeB -> let xcompare = Rectangle.(compare (x holeA) (x holeB)) in if xcompare = 0 then Rectangle.(compare (y holeA) (y holeB)) else xcompare) (splitHoles bin.holes); *)
             bin.holes := splitHoles bin.holes;
             bin.rects := [ placedRect :: bin.rects ];
 
             debug "holes: %s" (String.concat "," (List.map (fun rect -> Rectangle.toString rect) bin.holes));
             rectPos;
-          );
-
-    value holesSquare holes =
-      let rec prepare holeA holes nextPassHoles retval =
-        match holes with 
-        [ [ holeB :: holes ] ->
-          match Rectangle.intersection holeA holeB with
-          [ Some intersection ->
-            let cuttingsA = Rectangle.minus holeA intersection in
-            let cuttingsB = Rectangle.minus holeB intersection in
-              prepare intersection holes (cuttingsA @ cuttingsB @ nextPassHoles) retval
-          | _ -> prepare holeA holes [ holeB :: nextPassHoles ] retval
-          ]
-        | _ ->
-          match nextPassHoles with
-          [ [] -> [ holeA :: retval ]
-          | nextPassHoles -> prepare (List.hd nextPassHoles) (List.tl nextPassHoles) [] [ holeA :: retval ]
-          ]
-        ]
-      in
-
-      let rects = prepare (List.hd holes) (List.tl holes) [] [] in
-        List.fold_left (fun square rect -> square + Rectangle.(width rect * height rect)) 0 rects;
-
-    value rectsSquare rects = List.fold_left (fun square rect -> square + Rectangle.(width rect * height rect)) 0 rects;
+          );      
+    );
 
     value remove bin rect =
-      let () = debug:holes "----------" in
-      let () = debug "+++rects %s" (String.concat ";" (List.map (fun hole -> Rectangle.toString hole) bin.rects)) in
-      let () = debug "+++holes %s" (String.concat ";" (List.map (fun hole -> Rectangle.toString hole) bin.holes)) in
-
-      let rec mergePass holes retval =
-        let () = debug "mergePass call %s" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) holes)) in
-        let () = debug:holes "mergePass call %d %d" (List.length holes) (List.length retval) in
-        match holes with
-        [ [ holeA :: holes ] -> merge holeA holes [] retval False
-        | _ -> assert False
-        ]
-
-      and merge holeA holes checkedHoles retval changed =
-        let () = debug "\t-------------------------------" in
-        let () = debug "\tholes %s" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) holes)) in
-        let () = debug "\tcheckedHoles %s" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) checkedHoles)) in
-        let () = debug "\tretval %s" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) retval)) in
-        (* let () = debug "\trects square + holes square %d" (holesSquare [ holeA :: (holes @ checkedHoles) ] + rectsSquare bin.rects) in *)
-        match holes with
-        [ [] ->
-            let () = debug "\tchanged %B" changed in
-            if changed
-            then mergePass ((List.rev retval) @ (List.rev checkedHoles) @ [ holeA ]) []
-            else
-              match checkedHoles with
-              [ [] -> [ holeA :: retval ]
-              | _ -> mergePass checkedHoles [ holeA :: retval ] 
-              ]
-        | _ ->
-          let holeB = List.hd holes in
-            let () = debug "\tholeA = %s holeB = %s" (Rectangle.toString holeA) (Rectangle.toString holeB) in
-            let () = debug "\t%s inside %s: %B" (Rectangle.toString holeB) (Rectangle.toString holeA) (Rectangle.rectInside holeA holeB) in
-
-            if Rectangle.rectInside holeA holeB
-            then merge holeA (List.tl holes) checkedHoles retval changed
-            else
-
-            let () = debug "\t%s inside %s: %B" (Rectangle.toString holeA) (Rectangle.toString holeB) (Rectangle.rectInside holeB holeA) in
-            if Rectangle.rectInside holeB holeA
-            then merge holeB (List.tl holes) checkedHoles retval True
-            else
-
-            let () = debug "\t%s and %s intersects: %B" (Rectangle.toString holeA) (Rectangle.toString holeB) (Rectangle.intersects holeA holeB) in
-            if Rectangle.intersects holeA holeB
-            then              
-              let () = debug "\t%s plus %s: %s" (Rectangle.toString holeA) (Rectangle.toString holeB) (String.concat ";" (List.map (fun hole -> Rectangle.toString hole) (Hole.plus holeA holeB))) in
-              match Hole.plus holeA holeB with
-              [ [ newHoleA; newHoleB ] when Rectangle.(equal newHoleA holeA && equal newHoleB holeB || equal newHoleA holeB && equal newHoleB holeA) ->
-                let () = debug "\tcase 0" in
-                  merge holeA (List.tl holes) [ holeB :: checkedHoles ] retval changed
-              | [ newHoleA; newHoleB ] ->
-                let () = debug "\tcase 1" in
-                let allHoles = [ holeA :: holes @ checkedHoles @ retval ] in
-                let (changed, checkedHoles) =
-                  if List.exists (fun hole -> Rectangle.rectInside hole newHoleB) allHoles
-                  then let () = debug "\t%s or it's shell rect already in max rects" (Rectangle.toString newHoleB) in (changed, checkedHoles)
-                  else let () = debug "\tadding %s to max rects" (Rectangle.toString newHoleB) in (True, [ newHoleB :: checkedHoles ])
-                in
-                let (changed, checkedHoles) =
-                  if List.exists (fun hole -> Rectangle.rectInside hole newHoleA) allHoles
-                  then let () = debug "\t%s or it's shell rect already in max rects" (Rectangle.toString newHoleA) in (changed, checkedHoles)
-                  else let () = debug "\tadding %s to max rects" (Rectangle.toString newHoleA) in (True, [ newHoleA :: checkedHoles ])
-                in
-                  merge holeA (List.tl holes) [ holeB :: checkedHoles ] retval changed
-              | [ newHole ] when Rectangle.rectInside newHole holeA && Rectangle.rectInside newHole holeB -> let () = debug "\tcase 2" in merge newHole (List.tl holes) checkedHoles retval True
-              | [ newHole ] when Rectangle.rectInside newHole holeA -> let () = debug "\tcase 3" in merge newHole (List.tl holes) [ holeB :: checkedHoles ] retval True
-              | [ newHole ] when Rectangle.rectInside newHole holeB -> let () = debug "\tcase 4" in merge holeA (List.tl holes) [ newHole :: checkedHoles ] retval True
-              | [ newHole ] ->
-                let () = debug "\tcase 5" in
-                let allHoles = [ holeA :: holes @ checkedHoles @ retval ] in
-                let (changed, checkedHoles) =
-                  if List.exists (fun hole -> Rectangle.rectInside hole newHole) allHoles
-                  then let () = debug "\t%s or it's shell rect already in max rects" (Rectangle.toString newHole) in (changed, checkedHoles)
-                  else let () = debug "\tadding %s to max rects" (Rectangle.toString newHole) in (True, [ newHole :: checkedHoles ])
-                in
-                 merge holeA (List.tl holes) [ holeB :: checkedHoles] retval changed
-              | [] -> let () = debug "\t case 6" in merge holeA (List.tl holes) [ holeB :: checkedHoles ] retval changed (* this case is when rects contacts by single vertex *)
-              | _ -> assert False
-              ]
-            else merge holeA (List.tl holes) [ holeB :: checkedHoles ] retval changed
-        ]
-      in
-        let rects = List.remove bin.rects rect in
-          if rects <> bin.rects
-          then (
-            bin.rects := rects;
-            bin.holes := mergePass [ rect :: bin.holes ] []; 
-            (* bin.holes := List.sort ~cmp:(fun holeA holeB -> let xcompare = Rectangle.(compare (x holeA) (x holeB)) in if xcompare = 0 then Rectangle.(compare (y holeA) (y holeB)) else xcompare) (mergePass [ rect :: bin.holes ] None); *)
-            debug "bin holes %s" (String.concat "," (List.map (fun hole -> Rectangle.toString hole) bin.holes));
-          )
-          else ();
+      let rects = List.remove bin.rects rect in
+        if rects <> bin.rects
+        then (
+          bin.rects := rects;
+          bin.holes := [ rect :: bin.holes ];
+          bin.needRepair := True;
+        )
+        else ();
 
     value clean bin = (
       bin.holes := [ Rectangle.fromCoordsAndDims 0 0 bin.width bin.height ];
       bin.rects := [];
+      bin.needRepair = False;
     );
 
     value isConsistent bin = (holesSquare bin.holes) + (rectsSquare bin.rects) = bin.width * bin.height;
