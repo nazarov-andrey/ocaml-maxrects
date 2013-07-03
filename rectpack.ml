@@ -120,7 +120,12 @@ module Bin =
       needRepair: mutable bool;
     };
 
-    value create width height = { width; height; holes = [ Rectangle.fromCoordsAndDims 0 0 width height ]; rects = []; needRepair = False };
+    value create width height =
+      let aholes = [(67,254,317,16);(0,267,512,3);(67,259,445,11);(67,242,95,100);(0,267,168,75);(67,244,101,98);(67,244,197,26);(155,166,44,12);(155,166,7,176);(143,166,56,1);(120,192,42,150);(315,106,5,25);(301,156,109,15);(320,155,90,16);(192,99,7,79);(143,115,8,23);(504,132,8,296);(427,132,42,22);(427,132,85,21);(499,132,13,67);(509,51,3,461);(508,132,4,380);(169,99,136,7);(169,99,91,12);(485,45,9,6);(485,77,27,3);(503,51,9,29);(295,71,115,9);(295,69,40,11);(408,45,2,35);(408,45,86,1);(363,45,27,1);(390,70,20,10);(466,0,28,23);(363,17,1,6);(230,17,134,4);(366,147,44,24);(366,147,146,6);(366,147,103,7);(254,506,107,6);(0,298,233,44);(428,372,44,56);(499,259,13,169);(185,244,79,94);(0,372,308,82);(120,359,67,105);(384,194,26,5);(470,176,42,23);(0,398,361,56);(0,398,472,30);(185,254,86,84);(281,480,80,32);(287,372,21,140);(82,508,430,4);(0,298,271,40);(185,244,48,98);(82,492,137,20);(185,254,199,57);(0,398,512,2);(428,372,84,28);(478,474,34,5);(0,372,86,115);(219,368,14,112);(287,398,74,114);(120,368,113,96);(502,474,10,38);(0,298,394,13);(219,372,16,108);(0,372,235,92);(0,426,512,2);(0,451,443,3);(254,507,258,5);(185,259,209,52);(185,259,327,27);(495,259,17,141);(489,259,23,79);(0,509,512,3);(287,451,156,28);(82,372,4,140);(431,259,81,52);(102,24,31,2);(120,0,13,26);(180,26,50,20);(351,71,15,58);(315,106,51,23);(295,46,10,60);(221,98,39,13);(239,73,15,38);(221,98,84,8);(169,99,30,13);(169,87,11,25);(264,182,33,12);(260,157,4,21);(283,157,127,14);(283,157,14,37);(73,192,89,20);(0,199,162,13);(73,174,29,38);(162,178,102,66);(410,46,75,34);(199,111,61,67);(297,171,113,23);(410,154,59,22);(410,176,60,23);(469,153,30,23);(264,194,120,30);(384,199,120,30);(0,212,120,30);(264,224,120,30);(384,229,120,30);(233,338,75,34);(308,338,120,30);(0,342,120,30);(308,368,120,30);(428,338,67,17);(120,342,67,17);(428,355,67,17);(297,0,67,17);(361,428,147,23);(235,454,52,26);(230,0,67,17);(86,464,71,28);(157,464,62,28);(361,479,88,28);(449,479,53,28);(0,487,82,22);(394,286,18,25);(478,451,30,23);(254,480,27,26);(102,0,18,24);(364,0,102,23);(180,46,74,27);(363,23,131,22);(305,46,30,23);(335,46,55,25);(494,0,18,26);(494,26,18,25);(390,45,18,25);(254,46,41,26);(254,72,41,26);(180,73,41,26);(427,80,41,26);(102,87,49,28);(468,80,41,26);(260,106,55,25);(485,51,18,26);(221,73,18,25);(151,87,18,25);(412,286,19,25);(427,106,41,26);(468,106,41,26);(151,112,41,26);(102,115,41,26);(260,131,41,26);(143,138,49,28);(102,141,41,26);(301,131,19,25);(264,157,19,25);(102,167,53,25);(0,174,73,25);(219,480,35,28);(168,270,17,28);(305,80,46,26);(320,129,46,26);(187,342,46,26);(443,451,35,28);(366,80,61,67);(102,26,78,61)] in
+      let aholes = List.map (fun (x, y, w, h) -> Rectangle.fromCoordsAndDims x y w h) aholes in
+      let arects = [(133,0,97,26);(271,311,218,27);(230,21,133,25);(472,400,27,26);(0,0,102,174);(0,242,67,25)] in
+      let arects = List.map (fun (x, y, w, h) -> Rectangle.fromCoordsAndDims x y w h) arects in
+        { width; height; holes = aholes; rects = arects; needRepair = True };
     value rects bin = bin.rects;
     value holes bin = bin.holes;
     value getRect bin indx = List.nth bin.rects (indx mod (List.length bin.rects));
@@ -324,21 +329,21 @@ module Bin =
     value isConsistent bin = (holesSquare bin.holes) + (rectsSquare bin.rects) = bin.width * bin.height;
   end;
 
-value binSize = 200;
-value scale = 2;
-value toScreen pnt = Point.(create (scale * (x pnt) + 100) (600 - scale * (y pnt) - 10));
+value binSize = 512;
+value scale = 1;
+value toScreen pnt = Point.(create (scale * (x pnt) + 100) (1200 - scale * (y pnt) - 10));
 value drawRect rect =
   let lb = toScreen (Rectangle.leftBottom rect) in
     Graphics.draw_rect (Point.x lb) (Point.y lb - scale * (Rectangle.height rect)) (scale * Rectangle.width rect) (scale * Rectangle.height rect);
 
 value showHolesMode = ref False;
 value holeIndx = ref 0;
-value rects = ref [];
+(* value rects = ref []; *)
 value cnt = ref 0;
 
 let bin = Bin.create binSize binSize in (
   try
-    Graphics.open_graph " 800X600"
+    Graphics.open_graph " 1200X1200"
   with [ Graphics.Graphic_failure reason -> ( debug "fail %s" reason; exit 0; ) ];
 
   debug:pizda "%s" (String.concat "," (List.map (fun rect -> Rectangle.toString rect) (Hole.plus (Rectangle.fromCoordsAndDims 0 0 20 20) (Rectangle.fromCoordsAndDims 20 20 40 40))));
@@ -348,8 +353,8 @@ let bin = Bin.create binSize binSize in (
 
   drawRect (Rectangle.fromCoordsAndDims 0 0 binSize binSize);
 
-  Graphics.set_color Graphics.green;
-  Graphics.set_line_width 2;
+  
+  Graphics.set_line_width 1;
 
 (*   drawRect (Rectangle.fromCoordsAndDims 28 0 38 200);
   drawRect (Rectangle.fromCoordsAndDims 50 18 150 182);
@@ -357,7 +362,183 @@ let bin = Bin.create binSize binSize in (
   Graphics.set_color Graphics.magenta; *)
   (* drawRect (Rectangle.fromCoordsAndDims 50 0 16 200); *)
 
-  debug "++++ %B" (Rectangle.rectInside (Rectangle.fromCoordsAndDims 28 0 38 200) (Rectangle.fromCoordsAndDims 50 0 16 200));
+
+(* drawRect (Rectangle.fromCoordsAndDims 61 19 100 94);
+drawRect (Rectangle.fromCoordsAndDims 261 23 81 1001);
+drawRect (Rectangle.fromCoordsAndDims 0 113 161 911);
+drawRect (Rectangle.fromCoordsAndDims 161 18 68 5);
+drawRect (Rectangle.fromCoordsAndDims 0 117 1024 907);
+drawRect (Rectangle.fromCoordsAndDims 261 112 763 912);
+drawRect (Rectangle.fromCoordsAndDims 261 100 586 924);
+drawRect (Rectangle.fromCoordsAndDims 448 92 399 932);
+drawRect (Rectangle.fromCoordsAndDims 394 15 70 3);
+drawRect (Rectangle.fromCoordsAndDims 448 15 16 1009);
+drawRect (Rectangle.fromCoordsAndDims 937 0 87 1024);
+drawRect (Rectangle.fromCoordsAndDims 734 73 113 951);
+drawRect (Rectangle.fromCoordsAndDims 577 0 22 92);
+drawRect (Rectangle.fromCoordsAndDims 464 73 135 19);
+drawRect (Rectangle.fromCoordsAndDims 567 0 10 73);
+drawRect (Rectangle.fromCoordsAndDims 464 56 113 17);
+drawRect (Rectangle.fromCoordsAndDims 0 20 61 1004);
+drawRect (Rectangle.fromCoordsAndDims 135 18 94 1); *)
+
+(* drawRect (Rectangle.fromCoordsAndDims 937 0 87 372);
+drawRect (Rectangle.fromCoordsAndDims 996 502 28 522);
+drawRect (Rectangle.fromCoordsAndDims 570 92 277 20);
+drawRect (Rectangle.fromCoordsAndDims 383 100 24 130);
+drawRect (Rectangle.fromCoordsAndDims 61 19 168 4);
+drawRect (Rectangle.fromCoordsAndDims 383 100 65 122);
+drawRect (Rectangle.fromCoordsAndDims 0 20 161 93);
+drawRect (Rectangle.fromCoordsAndDims 610 998 122 26);
+drawRect (Rectangle.fromCoordsAndDims 261 23 81 77);
+drawRect (Rectangle.fromCoordsAndDims 1017 0 7 1024);
+drawRect (Rectangle.fromCoordsAndDims 0 243 142 4);
+drawRect (Rectangle.fromCoordsAndDims 936 112 88 260);
+drawRect (Rectangle.fromCoordsAndDims 61 19 100 94);
+drawRect (Rectangle.fromCoordsAndDims 0 1022 1024 2);
+drawRect (Rectangle.fromCoordsAndDims 610 482 20 126);
+drawRect (Rectangle.fromCoordsAndDims 0 897 122 127);
+drawRect (Rectangle.fromCoordsAndDims 773 348 41 24);
+drawRect (Rectangle.fromCoordsAndDims 651 92 41 256);
+drawRect (Rectangle.fromCoordsAndDims 366 360 20 122);
+drawRect (Rectangle.fromCoordsAndDims 734 73 80 145);
+drawRect (Rectangle.fromCoordsAndDims 732 608 20 24);
+drawRect (Rectangle.fromCoordsAndDims 752 478 21 24);
+drawRect (Rectangle.fromCoordsAndDims 135 18 26 212);
+drawRect (Rectangle.fromCoordsAndDims 734 73 113 39);
+drawRect (Rectangle.fromCoordsAndDims 135 18 7 342);
+drawRect (Rectangle.fromCoordsAndDims 567 0 32 92);
+drawRect (Rectangle.fromCoordsAndDims 0 1010 732 14);
+drawRect (Rectangle.fromCoordsAndDims 394 15 70 3);
+drawRect (Rectangle.fromCoordsAndDims 570 92 244 126);
+drawRect (Rectangle.fromCoordsAndDims 122 19 20 341);
+drawRect (Rectangle.fromCoordsAndDims 366 1002 366 22);
+drawRect (Rectangle.fromCoordsAndDims 122 117 139 113);
+drawRect (Rectangle.fromCoordsAndDims 570 0 29 222);
+drawRect (Rectangle.fromCoordsAndDims 386 100 21 252);
+drawRect (Rectangle.fromCoordsAndDims 122 19 39 211);
+drawRect (Rectangle.fromCoordsAndDims 0 20 229 3);
+drawRect (Rectangle.fromCoordsAndDims 135 18 94 5);
+drawRect (Rectangle.fromCoordsAndDims 630 352 21 126);
+drawRect (Rectangle.fromCoordsAndDims 448 15 16 77);
+drawRect (Rectangle.fromCoordsAndDims 448 56 151 36);
+drawRect (Rectangle.fromCoordsAndDims 976 632 48 392); *)
+
+  
+(* drawRect (Rectangle.fromCoordsAndDims 906 87 34 270);
+drawRect (Rectangle.fromCoordsAndDims 672 181 134 176);
+drawRect (Rectangle.fromCoordsAndDims 772 87 34 270);
+drawRect (Rectangle.fromCoordsAndDims 806 181 134 176);
+drawRect (Rectangle.fromCoordsAndDims 773 70 120 17);
+drawRect (Rectangle.fromCoordsAndDims 288 85 29 278);
+drawRect (Rectangle.fromCoordsAndDims 207 23 86 62);
+drawRect (Rectangle.fromCoordsAndDims 61 118 146 119);
+drawRect (Rectangle.fromCoordsAndDims 128 19 79 218);
+drawRect (Rectangle.fromCoordsAndDims 207 203 110 160);
+drawRect (Rectangle.fromCoordsAndDims 439 18 1 194);
+drawRect (Rectangle.fromCoordsAndDims 342 108 98 104);
+drawRect (Rectangle.fromCoordsAndDims 440 23 95 58);
+drawRect (Rectangle.fromCoordsAndDims 540 81 46 218);
+drawRect (Rectangle.fromCoordsAndDims 440 168 146 131);
+drawRect (Rectangle.fromCoordsAndDims 440 15 24 66);
+drawRect (Rectangle.fromCoordsAndDims 293 23 49 62);
+drawRect (Rectangle.fromCoordsAndDims 317 23 25 189);
+drawRect (Rectangle.fromCoordsAndDims 394 15 70 3);
+drawRect (Rectangle.fromCoordsAndDims 773 0 86 70);
+drawRect (Rectangle.fromCoordsAndDims 0 455 118 86);
+drawRect (Rectangle.fromCoordsAndDims 360 422 67 95);
+drawRect (Rectangle.fromCoordsAndDims 146 363 171 59);
+drawRect (Rectangle.fromCoordsAndDims 146 237 61 185);
+drawRect (Rectangle.fromCoordsAndDims 573 299 99 58);
+drawRect (Rectangle.fromCoordsAndDims 207 18 22 5);
+drawRect (Rectangle.fromCoordsAndDims 135 18 94 1);
+drawRect (Rectangle.fromCoordsAndDims 1013 0 11 1024);
+drawRect (Rectangle.fromCoordsAndDims 427 212 13 87);
+drawRect (Rectangle.fromCoordsAndDims 940 87 84 270);
+drawRect (Rectangle.fromCoordsAndDims 1001 87 23 937);
+drawRect (Rectangle.fromCoordsAndDims 0 541 146 483);
+drawRect (Rectangle.fromCoordsAndDims 118 455 28 569);
+drawRect (Rectangle.fromCoordsAndDims 0 640 478 384);
+drawRect (Rectangle.fromCoordsAndDims 478 517 95 58);
+drawRect (Rectangle.fromCoordsAndDims 360 603 118 421);
+drawRect (Rectangle.fromCoordsAndDims 744 575 280 449);
+drawRect (Rectangle.fromCoordsAndDims 0 897 1024 127);
+drawRect (Rectangle.fromCoordsAndDims 478 575 266 322);
+drawRect (Rectangle.fromCoordsAndDims 146 422 214 218);
+drawRect (Rectangle.fromCoordsAndDims 787 357 214 218);
+drawRect (Rectangle.fromCoordsAndDims 573 357 214 218);
+drawRect (Rectangle.fromCoordsAndDims 427 299 146 218);
+drawRect (Rectangle.fromCoordsAndDims 0 237 146 218);
+drawRect (Rectangle.fromCoordsAndDims 317 212 110 210);
+drawRect (Rectangle.fromCoordsAndDims 0 20 61 217);
+drawRect (Rectangle.fromCoordsAndDims 535 23 71 58);
+drawRect (Rectangle.fromCoordsAndDims 535 56 119 25);
+drawRect (Rectangle.fromCoordsAndDims 653 0 1 81);
+drawRect (Rectangle.fromCoordsAndDims 586 143 86 214);
+drawRect (Rectangle.fromCoordsAndDims 672 81 101 6);
+drawRect (Rectangle.fromCoordsAndDims 586 81 86 62);
+ *)
+Graphics.set_color Graphics.magenta;
+
+let bholes = [(0,81,450,40);(0,121,450,5);(0,61,450,14);(0,75,450,6);(0,299,450,7);(0,287,450,11);(0,298,450,1);(0,348,450,2);(0,306,450,12);(0,318,450,30);(0,150,450,11);(0,161,450,4);(0,127,450,17);(0,144,450,6);(0,261,450,19);(0,280,450,7);(0,165,450,62);(0,227,450,34);(0,387,100,2);(0,376,100,10);(0,386,100,1);(0,389,100,2);(0,364,100,4);(0,350,100,12);(0,362,100,2);(0,368,100,8);(0,391,100,9);(450,27,50,7);(450,15,50,10);(450,25,50,2);(450,52,50,16);(450,68,50,2);(450,34,50,16);(450,50,50,2);(450,10,50,1);(450,0,50,10);(450,11,50,4);(450,247,50,36);(450,283,50,5);(450,124,50,62);(450,186,50,61);(450,299,50,1);(450,288,50,10);(450,298,50,1);(450,100,50,5);(450,70,50,21);(450,91,50,9);(450,121,50,3);(450,105,50,13);(450,118,50,3)] in
+List.iter (fun (x, y, w, h) -> drawRect (Rectangle.fromCoordsAndDims x y w h)) bholes;
+
+(* let aholes = [(0,338,472,174);(0,426,512,86);(67,174,204,338);(102,26,128,486);(499,0,13,512);(102,0,31,512);(102,46,169,466);(489,0,23,400);(0,267,271,245);(230,0,282,21);(0,338,512,62);(363,0,149,311);(67,174,445,137);(102,46,410,265);(0,174,512,68);(0,267,512,44)] in
+List.iter (fun (x, y, w, h) -> drawRect (Rectangle.fromCoordsAndDims x y w h)) aholes;
+ *)
+Graphics.set_color Graphics.green;
+(* let brects = [(133,0,97,26);(271,311,218,27);(230,21,133,25);(472,400,27,26);(0,0,102,174);(0,242,67,25)] in
+List.iter (fun (x, y, w, h) -> drawRect (Rectangle.fromCoordsAndDims x y w h)) brects; *)
+
+(* let arects = [(133,0,97,26);(271,311,218,27);(0,242,67,25)] in
+List.iter (fun (x, y, w, h) -> drawRect (Rectangle.fromCoordsAndDims x y w h)) arects; *)
+  
+
+
+
+
+(* drawRect (Rectangle.fromCoordsAndDims 806 87 100 94);
+drawRect (Rectangle.fromCoordsAndDims 672 87 100 94);
+drawRect (Rectangle.fromCoordsAndDims 207 85 81 118);
+drawRect (Rectangle.fromCoordsAndDims 606 0 47 56);
+drawRect (Rectangle.fromCoordsAndDims 440 81 100 87);
+drawRect (Rectangle.fromCoordsAndDims 61 19 67 99);
+drawRect (Rectangle.fromCoordsAndDims 342 18 97 90);
+drawRect (Rectangle.fromCoordsAndDims 360 517 118 86);
+drawRect (Rectangle.fromCoordsAndDims 535 0 71 23);
+drawRect (Rectangle.fromCoordsAndDims 893 0 120 87);
+drawRect (Rectangle.fromCoordsAndDims 654 0 119 81);
+drawRect (Rectangle.fromCoordsAndDims 464 0 71 23);
+drawRect (Rectangle.fromCoordsAndDims 394 0 70 15);
+drawRect (Rectangle.fromCoordsAndDims 342 0 52 18);
+drawRect (Rectangle.fromCoordsAndDims 229 0 113 23);
+drawRect (Rectangle.fromCoordsAndDims 135 0 94 18);
+drawRect (Rectangle.fromCoordsAndDims 61 0 74 19);
+drawRect (Rectangle.fromCoordsAndDims 0 0 61 20); *)
+
+(* drawRect (Rectangle.fromCoordsAndDims 161 23 100 94);
+drawRect (Rectangle.fromCoordsAndDims 342 18 106 82);
+drawRect (Rectangle.fromCoordsAndDims 522 0 45 56);
+drawRect (Rectangle.fromCoordsAndDims 847 0 90 112);
+drawRect (Rectangle.fromCoordsAndDims 464 0 58 56);
+drawRect (Rectangle.fromCoordsAndDims 734 0 113 73);
+drawRect (Rectangle.fromCoordsAndDims 599 0 135 92);
+drawRect (Rectangle.fromCoordsAndDims 394 0 70 15);
+drawRect (Rectangle.fromCoordsAndDims 342 0 52 18);
+drawRect (Rectangle.fromCoordsAndDims 229 0 113 23);
+drawRect (Rectangle.fromCoordsAndDims 135 0 94 18);
+drawRect (Rectangle.fromCoordsAndDims 61 0 74 19);
+drawRect (Rectangle.fromCoordsAndDims 0 0 61 20); *)
+
+
+  (* debug "++++ %B" (Rectangle.rectInside (Rectangle.fromCoordsAndDims 28 0 38 200) (Rectangle.fromCoordsAndDims 50 0 16 200)); *)
+  
+(*   Graphics.set_color Graphics.magenta;
+  List.iter (fun rect -> drawRect rect) bin.Bin.holes; 
+
+  Graphics.set_color Graphics.green;
+  List.iter (fun rect -> drawRect rect) bin.Bin.rects;  *)
+
   
 
   let showHole () =
@@ -383,53 +564,23 @@ let bin = Bin.create binSize binSize in (
     while True do {
       let c = Char.code (Graphics.read_key ()) in
         if c = 13
-        then
-          if !showHolesMode
+        then ()
+(*           let () = Bin.repair bin in (
+            Graphics.clear_graph ();
+            Graphics.set_color Graphics.red;
+            drawRect (Rectangle.fromCoordsAndDims 0 0 binSize binSize);
+
+            Graphics.set_color Graphics.magenta;
+            List.iter (fun rect -> drawRect rect) bin.Bin.holes; 
+
+            Graphics.set_color Graphics.green;
+            List.iter (fun rect -> drawRect rect) bin.Bin.rects;
+
+            let () = Printf.printf "bholes = [%s]\n" ((String.concat ";" (List.map (fun rect -> Rectangle.(Printf.sprintf "(%d,%d,%d,%d)" (x rect) (y rect) (width rect) (height rect))) (bin.holes @ bin.reuseRects))))) in
+          ) *)
+(*           if !showHolesMode
           then showHole ()
           else
-(*           (
-            if !cnt = 0
-            then
-              let pos = Bin.add bin 50 15 in (
-                  Graphics.set_color Graphics.green;
-                  drawRect (Rectangle.fromPntAndDims pos 50 15);
-              )
-            else
-
-            if !cnt = 1
-            then
-              let pos = Bin.add bin 30 120 in (
-                  Graphics.set_color Graphics.green;
-                  drawRect (Rectangle.fromPntAndDims pos 30 120);
-              )
-            else
-
-            if !cnt = 2
-            then
-              let pos = Bin.add bin 60 30 in (
-                  Graphics.set_color Graphics.green;
-                  drawRect (Rectangle.fromPntAndDims pos 60 30);
-              )
-            else            
-
-            if !cnt = 3
-            then (
-              Bin.remove bin (Bin.getRect bin 1);
-
-              Graphics.clear_graph ();
-
-              Graphics.set_color Graphics.red;
-              drawRect (Rectangle.fromCoordsAndDims 0 0 binSize binSize);
-
-              Graphics.set_color Graphics.green;
-              List.iter (fun rect -> drawRect rect) (Bin.rects bin);              
-            )
-            else ();
-
-            incr cnt;            
-          ) *)
-
-
             let (w, h) = if !rects = [] then (Random.int 20 + 10, Random.int 20 + 10) else let rect = List.hd !rects in ( rects.val := List.tl !rects; rect ) in
               try (          
                 debug "trying to add %d %d... " w h;
@@ -439,7 +590,7 @@ let bin = Bin.create binSize binSize in (
                   drawRect (Rectangle.fromPntAndDims pos w h);
                 )
               )          
-              with [ Bin.CantPlace -> debug "cannot place" ]
+              with [ Bin.CantPlace -> debug "cannot place" ] *)
         else
 
         if c = 100
